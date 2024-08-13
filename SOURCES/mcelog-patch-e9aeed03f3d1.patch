@@ -1,0 +1,39 @@
+From 4e9aeed03f3d17fb92662ff656566b0afb2ec99f Mon Sep 17 00:00:00 2001
+From: Prarit Bhargava <prarit@redhat.com>
+Date: Wed, 11 Jan 2017 10:01:40 -0500
+Subject: [PATCH] mcelog: is_cpu_supported() error message must be printed
+ Eprintf
+
+SYSERRprintf outputs a ": Success" message so the error message looks like
+
+mcelog: ERROR: AMD Processor family 21: mcelog does not support this
+processor.  Please use the edac_mce_amd module instead.
+: Success
+
+which is confusing for end-users.
+
+I changed this to do Eprintf which keeps the error return to userspace
+but drops the ": Success" line.
+
+Signed-off-by: Prarit Bhargava <prarit@redhat.com>
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ mcelog.c |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/mcelog.c b/mcelog.c
+index 96bebee14afe..37c0af624870 100644
+--- a/mcelog.c
++++ b/mcelog.c
+@@ -542,7 +542,7 @@ int is_cpu_supported(void)
+ 				if (family == 15) {
+ 					cputype = CPU_K8;
+ 				} else if (family >= 16) {
+-					SYSERRprintf("ERROR: AMD Processor family %d: mcelog does not support this processor.  Please use the edac_mce_amd module instead.\n", family);
++					Eprintf("ERROR: AMD Processor family %d: mcelog does not support this processor.  Please use the edac_mce_amd module instead.\n", family);
+ 					return 0;
+ 				}
+ 			} else if (!strcmp(vendor,"GenuineIntel"))
+-- 
+1.7.9.3
+

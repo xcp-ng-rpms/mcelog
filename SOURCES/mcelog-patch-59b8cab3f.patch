@@ -1,0 +1,99 @@
+From: Prarit Bhargava <prarit@redhat.com>
+
+Subject: mcelog version: Add ability for OS to define version
+
+commit 59b8cab3f607573cb55b6841ece2f2577be6b419
+Author: Prarit Bhargava <prarit@redhat.com>
+Date:   Mon May 22 10:25:57 2017 -0400
+
+    mcelog version: Add ability for OS to define version
+    
+    Example usage of this patch:
+    
+    [root@intel-purley-03 mcelog]# cat .os_version
+    mcelog-144-3.94d853b2ea81.el7
+    [root@intel-purley-03 mcelog]# make version.tmp
+    ( printf "char version[] = \"" ;                        \
+    if test -e .os_version; then                            \
+            cat .os_version | tr -d '\n' ;                  \
+    elif command -v git >/dev/null; then                    \
+            if [ -d .git ] ; then                           \
+                    git describe --tags HEAD | tr -d '\n';  \
+            else                                            \
+                    printf "unknown" ;                      \
+            fi ;                                            \
+    else                                                    \
+            printf "unknown" ;                              \
+    fi ;                                                    \
+    printf '";\n'                                           \
+    ) > version.tmp
+    [root@intel-purley-03 mcelog]# cat version.tmp
+    char version[] = "mcelog-144-3.94d853b2ea81.el7";
+    [root@intel-purley-03 mcelog]# rm .os_version
+    rm: remove regular file ‘.os_version’? y
+    [root@intel-purley-03 mcelog]# make version.tmp
+    ( printf "char version[] = \"" ;                        \
+    if test -e .os_version; then                            \
+            cat .os_version | tr -d '\n' ;                  \
+    elif command -v git >/dev/null; then                    \
+            if [ -d .git ] ; then                           \
+                    git describe --tags HEAD | tr -d '\n';  \
+            else                                            \
+                    printf "unknown" ;                      \
+            fi ;                                            \
+    else                                                    \
+            printf "unknown" ;                              \
+    fi ;                                                    \
+    printf '";\n'                                           \
+    ) > version.tmp
+    [root@intel-purley-03 mcelog]# cat version.tmp
+    char version[] = "v149-7-g62e645e4c0e9";
+    
+    ----8<----
+    
+    OSes package mcelog (rpm, deb, etc.) and the package version may differ
+    from the git version.
+    
+    Add the ability for the OS to define a version in a local .os_version
+    file.  If the file exists, the version in the file is returned for
+    'mcelog --version'.  If the file isn't specified the old method of using
+    git and defaulting to 'unknown' are used.
+    
+    Signed-off-by: Prarit Bhargava <prarit@redhat.com>
+    Signed-off-by: Andi Kleen <ak@linux.intel.com>
+
+diff --git a/Makefile b/Makefile
+index 864378eb72de315f07d424540509e844241fd932..57373afaf6c77f40d2188dc855c5bc2bd5a02657 100644
+--- a/Makefile
++++ b/Makefile
+@@ -81,16 +81,20 @@ depend: .depend
+ 	$(CC) -c $(CFLAGS) $(CPPFLAGS) $(WARNINGS) $(ADD_DEFINES) -o $@ $<
+ 
+ version.tmp: FORCE
+-	( echo -n "char version[] = \"" ; 	\
+-	if command -v git >/dev/null; then 	\
+-	if [ -d .git ] ; then 			\
+-		git describe --tags HEAD | tr -d '\n'; 	\
+-	else 					\
+-		echo -n "unknown" ; 		\
+-	fi ;					\
+-	else echo -n "unknown" ; fi ;		\
+-	echo '";'				\
+-	 ) > version.tmp
++	( printf "char version[] = \"" ; 			\
++	if test -e .os_version; then				\
++		cat .os_version	| tr -d '\n' ;			\
++	elif command -v git >/dev/null; then 			\
++		if [ -d .git ] ; then 				\
++			git describe --tags HEAD | tr -d '\n'; 	\
++		else 						\
++			printf "unknown" ; 			\
++		fi ;						\
++	else							\
++		printf "unknown" ;				\
++	fi ;							\
++	printf '";\n'						\
++	) > version.tmp
+ 
+ version.c: version.tmp
+ 	cmp version.tmp version.c || mv version.tmp version.c

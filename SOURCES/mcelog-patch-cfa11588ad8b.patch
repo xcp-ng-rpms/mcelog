@@ -1,0 +1,45 @@
+From cfa11588ad8b95b81b272e6fcec41b788455e8ec Mon Sep 17 00:00:00 2001
+From: Tony Luck <tony.luck@intel.com>
+Date: Fri, 3 Feb 2017 16:51:04 -0800
+Subject: [PATCH] Intel Xeons from Ivy Bridge onwards support a processor
+ identification number. Kernels v4.9 and higher include it
+ in the "mce" record.
+
+Signed-off-by: Tony Luck <tony.luck@intel.com>
+Signed-off-by: Andi Kleen <ak@linux.intel.com>
+---
+ mcelog.c |    3 +++
+ mcelog.h |    3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/mcelog.c b/mcelog.c
+index 3ae230dc7ef3..507f11bdbccb 100644
+--- a/mcelog.c
++++ b/mcelog.c
+@@ -445,6 +445,9 @@ static void dump_mce(struct mce *m, unsigned recordlen)
+ 	if (n > 0)
+ 		Wprintf("\n");
+ 
++	if (recordlen >= offsetof(struct mce, ppin) && m->ppin)
++		n += Wprintf("PPIN %llx\n", m->ppin);
++
+ 	if (recordlen >= offsetof(struct mce, cpuid) && m->cpuid) {
+ 		u32 fam, mod;
+ 		parse_cpuid(m->cpuid, &fam, &mod);
+diff --git a/mcelog.h b/mcelog.h
+index 6e175fede0f4..1f9453459b5d 100644
+--- a/mcelog.h
++++ b/mcelog.h
+@@ -31,6 +31,9 @@ struct mce {
+ 	__u32 socketid;	/* CPU socket ID */
+ 	__u32 apicid;	/* CPU initial apic ID */
+ 	__u64 mcgcap;	/* MCGCAP MSR: machine check capabilities of CPU */
++	__u64 synd;	/* MCA_SYND MSR: only valid on SMCA systems */
++	__u64 ipid;	/* MCA_IPID MSR: only valid on SMCA systems */
++	__u64 ppin;	/* Protected Processor Inventory Number */
+ };
+ 
+ #define X86_VENDOR_INTEL	0
+-- 
+1.7.9.3
+
