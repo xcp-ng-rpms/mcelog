@@ -1,285 +1,82 @@
-%define	last_tar_git_commit d2e13bf0
-%define	last_git_commit 94d853b2ea81
+%global package_speccommit c34183d888dfa0a8ddde61dc6f155c6c841c7dd1
+%global usver 196
+%global xsver 3
+%global xsrel %{xsver}%{?xscount}%{?xshash}
 
 Summary:	Tool to translate x86-64 CPU Machine Check Exception data
 Name:		mcelog
-Version:	144
-Release:	8.%{last_git_commit}%{?dist}
+Version:	196
+Release:	%{xsrel}%{?dist}
 Epoch:		3
 Group:		System Environment/Base
-License:	GPLv2
-Source0:	mcelog-%{last_tar_git_commit}.tar.bz2
+License:	GPL-2.0-only
+URL:		https://github.com/andikleen/mcelog
+Source0: mcelog-196.tar.gz
 # note that this source OVERRIDES the one on the tarball above!
-Source1:	mcelog.conf
-Source2:	mcelog.service
-Source10:	mcelog.setup
-Patch0:		mcelog-fix-trigger-path-and-cacheing.patch
-# BZ 1039183: Add Haswell and correct Ivy Bridge
-Patch1:		mcelog-update-2577aeb.patch
-Patch2:		mcelog-update-f30da3d.patch
-# BZ 1138319: Add additional Haswell support (see patch for additional info)
-Patch3:		mcelog-haswell-support.patch
-Patch4:		mcelog-update-9de4924.patch
-Patch5:		mcelog-update-e7e0ac1.patch
-Patch6:		mcelog-patch-1bd2984.patch
-Patch7:		mcelog-update-e4aca63.patch
-Patch8:		mcelog-update-94d853b2ea81.patch
-Patch9:		mcelog-patch-e9aeed03f3d1.patch
-Patch10:	mcelog-patch-cfa11588ad8b.patch
-# Patches 11-14 below can be removed on the next full code update.
-Patch11:	mcelog-patch-commit-916015663906.patch
-Patch12:	mcelog-patch-0755b55af.patch
-Patch13:	mcelog-patch-59b8cab3f.patch
-Patch14:	mcelog-patch-f8f1490cb.patch
-URL:		https://github.com/andikleen/mcelog.git
-Buildroot:	%{_tmppath}/%{name}-%{version}-root
+Source1: mcelog.conf
+Source2: mcelog.service
 ExclusiveArch:	i686 x86_64
-Requires(post): systemd-units
-Requires(preun): systemd-units
-Requires(postun): systemd-units
+Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
+BuildRequires: make
+BuildRequires: gcc
 BuildRequires: systemd
 
 %description
 mcelog is a utility that collects and decodes Machine Check Exception data
-on x86-32 and x86-64 systems. It can be run either as a daemon, or by cron.
+on x86-32 and x86-64 systems.
 
 %prep
-%setup -q -n %{name}-%{last_tar_git_commit}
-%patch0 -p1
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
-%patch5 -p1
-%patch6 -p1
-%patch7 -p1
-%patch8 -p1
-%patch9 -p1
-%patch10 -p1
-%patch11 -p1
-%patch12 -p1
-%patch13 -p1
-%patch14 -p1
+%autosetup
 
 %build
-mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}
-mkdir -p $RPM_BUILD_ROOT/%{_sbindir}
-mkdir -p $RPM_BUILD_ROOT/%{_mandir}
-
-# Make sure mcelog --version and 'rpm -q mcelog' are consistent
-echo "%{name}-%{version}-%{release}" > .os_version
-
-make CFLAGS="$RPM_OPT_FLAGS  -Wl,-z,relro,-z,now -fpie" LDFLAGS="-Wl,-z,relro,-z,now -fpie -pie"
+%make_build CFLAGS="$RPM_OPT_FLAGS -fpie -pie"
 
 %install
-rm -rf $RPM_BUILD_ROOT
-mkdir -p $RPM_BUILD_ROOT/%{_mandir}/man{1,5,8}
+mkdir -p $RPM_BUILD_ROOT/%{_mandir}/man{5,8}
 mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog
 mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/triggers
 mkdir -p $RPM_BUILD_ROOT/%{_unitdir}
-mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/cron.hourly
 mkdir -p $RPM_BUILD_ROOT/%{_sbindir}
 install -p -m755 mcelog $RPM_BUILD_ROOT/%{_sbindir}/mcelog
 install -p -m644 %{SOURCE1} $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/mcelog.conf
-install -p -m755 %{SOURCE10} $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/mcelog.setup
 install -p -m755 triggers/cache-error-trigger $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/triggers/cache-error-trigger
 install -p -m755 triggers/dimm-error-trigger $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/triggers/dimm-error-trigger
 install -p -m755 triggers/page-error-trigger $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/triggers/page-error-trigger
 install -p -m755 triggers/socket-memory-error-trigger $RPM_BUILD_ROOT/%{_sysconfdir}/mcelog/triggers/socket-memory-error-trigger
-install -p -m755 mcelog.cron $RPM_BUILD_ROOT/%{_sysconfdir}/cron.hourly/mcelog.cron
-install -p -m644 %{SOURCE2} $RPM_BUILD_ROOT%{_unitdir}/mcelog.service
-install -p -m644 mcelog.8 $RPM_BUILD_ROOT/%{_mandir}/man8
-install -p -m644 mcelog.conf.5 $RPM_BUILD_ROOT/%{_mandir}/man5
-install -p -m644 mcelog.triggers.5 $RPM_BUILD_ROOT/%{_mandir}/man5
-
-%clean
-rm -rf $RPM_BUILD_ROOT
+install -p -m644 mcelog.service $RPM_BUILD_ROOT%{_unitdir}/mcelog.service
+install -p -m644 mcelog*.8 $RPM_BUILD_ROOT/%{_mandir}/man8/
+install -p -m644 mcelog*.5 $RPM_BUILD_ROOT/%{_mandir}/man5/
 
 %post
-case "$1" in
-	1) # This is an initial installation
-		systemctl enable mcelog.service &> /dev/null || systemctl daemon-reload &> /dev/null
-	;;
-	2) # This is an upgrade - don't reactivate the service again
-		:
-	;;
-esac
+%systemd_post mcelog.service
+systemctl daemon-reload
 
 %preun
-# Handle removing mcelog
-if [ "$1" -eq 0 ]; then
-	systemctl disable mcelog.service &> /dev/null
-	systemctl stop mcelog.service &> /dev/null
-fi
+%systemd_preun mcelog.service
 
 %postun
-# Handle upgrading mcelog
-if [ "$1" -ge 1 ]; then
-	systemctl try-restart mcelog.service &> /dev/null
-fi
+%systemd_postun_with_restart mcelog.service
 
 %files
-%defattr(-,root,root,-)
-%doc README.md CHANGES
 %{_sbindir}/mcelog
 %dir %{_sysconfdir}/mcelog
 %{_sysconfdir}/mcelog/triggers
 %config(noreplace) %{_sysconfdir}/mcelog/mcelog.conf
-%{_sysconfdir}/mcelog/mcelog.setup
-%{_sysconfdir}/cron.hourly/mcelog.cron
 %{_unitdir}/mcelog.service
-%attr(0644,root,root) %{_mandir}/*/*
+%{_mandir}/*/*
 
 %changelog
-* Tue Oct 17 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.8.94d853b2ea81
-- Fix typo in spec file for .os_version[1454419]
-* Tue Oct 17 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.7.94d853b2ea81
-- Fix mcelog --version [1454419]
-* Mon Oct 16 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.6.94d853b2ea81
-- Fix return value from 'mcelog --help' [1481421]
-* Thu Oct  5 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.5.94d853b2ea81
-- Fix mcelog.service file enable/disable after install & upgrade [1413284]
-* Tue Sep 19 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.4.94d853b2ea81
-- Cleanup spec and patch files [1493151]
-* Thu Apr 27 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.3.94d853b2ea81
-- Fix "warning: 16 bytes ignored in each record" warning [1445809]
-* Thu Feb  2 2017 Prarit Bhargava <prarit@redhat.com> - 3:144.2.94d853b2ea81
-- mcelog: is_cpu_supported() error message must be printed Eprintf [1406626]
-* Wed Nov 30 2016 Prarit Bhargava <prarit@redhat.com> - 3:144.1.94d853b2ea81
-- update NVR to 144 to match upstream
-- add Denverton SoC support [1273768]
-- add Kabylake U/Y support, 0x8E [1310954]
-- add Kabylake H/S support, 0x9E [1310955]
-- add Knights Mill support [1381316]
-- mcelog didn't remove /var/run/mcelog-client when exitting [1362123]
-* Mon Oct 24 2016 Prarit Bhargava <prarit@redhat.com> - 3:136.2.e4aca63
-- fix post-uninstall script warning during upgrade [1257116]
-* Fri May 13 2016 Prarit Bhargava <prarit@redhat.com> - 3:136-1.e4aca63
-- update NVR to 136 to match upstream [1336431]
-- additional general fixes [1336431]
-- Skylake Client support (6,94) (6,78) [1255571]
-- Broadwell SoC/DE, EP & EX support (6,79) [1255572]
-* Mon Sep 21 2015 Prarit Bhargava <prarit@redhat.com> - 3:120-3.e7e0ac1
-- Fix server restart when /var/run/mcelog-client socket exists [1256714]
-* Fri Jun 12 2015 Prarit Bhargava <prarit@redhat.com> - 3:120-2.e7e0ac1
-- add RELRO and PIE [1092567]
-* Fri Jun 12 2015 Prarit Bhargava <prarit@redhat.com> - 3:120-1.e7e0ac1
-- Add Broadwell-U, Broadwell-DE, and Knights Landing/Xeon Phi Support
-- additional general fixes
-- add mcelog.conf and mcelog.triggers man pages
-- update NVR to 120 to match upstream
-* Mon Oct 27 2014 Prarit Bhargava <prarit@redhat.com> - 3:101-3.9de4924
-- Update with latest minor fixes, no new support [1157683]
+* Tue Jun 18 2024 Gerald Elder-Vass <gerald.elder-vass@cloud.com> - 3:196-3
+- CP-47026: Move mcelog config changes to mcelog.spec
 
-* Mon Sep  8 2014 Prarit Bhargava <prarit@redhat.com> - 3:101-2.f30da3d
-- Additional Haswell Support [1138319]
+* Wed Jan 03 2024 Gerald Elder-Vass <gerald.elder-vass@cloud.com> - 3:196-2
+- Fix up spec file
+- CP-46265: Load dmi-sysfs to remove dependency on /dev/mem
 
-* Thu Sep  4 2014 Prarit Bhargava <prarit@redhat.com> - 3:101-1.f30da3d
-- Update to upstream NVR (101) [1136989]
+* Wed Dec 13 2023 Gerald Elder-Vass <gerald.elder-vass@cloud.com> - 3:196-1
+- Complete import for 196 (144 is not actually 144 and will cause issues)
 
-* Wed Sep  3 2014 Prarit Bhargava <prarit@redhat.com> - 2:1.0-0.13.f30da3d
-- Update to upstream commit f30da3d, minor fixes, no features [1085134]
-- Add /var/log/mcelog file [1098864]
-- remove .src.rpm file [1038755]
-
-* Wed Jan 22 2014 Prarit Bhargava <prarit@redhat.com> - 2:1.0-0.12.2577aeb
-- Add Haswell client cpuids, identify Ivy Bridge properly, and fix issues
-  on Ivy Bridge
-
-* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 2:1.0-0.11.d2e13bf0
-- Mass rebuild 2013-12-27
-
-* Tue Dec  3 2013 Prarit Bhargava <prarit@redhat.com> 2:1.0-0.10.d2e13bf0
-- Fix prebuilt binaries issue in tarball [1037730]
-
-* Thu Nov 21 2013 Prarit Bhargava <prarit@redhat.com> 2:1.0-0.9.d2e13bf0
-- disable extended logging suppport [1028645]
-
-* Wed May 15 2013 Prarit Bhargava <prarit@redhat.com> 2:1.0-0.8.d2e13bf0
-- update to commit d2e13bf0 [963287]
-
-* Thu Feb 14 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2:1.0-0.7.6e4e2a00
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_19_Mass_Rebuild
-
-* Thu Jul 19 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2:1.0-0.6.6e4e2a00
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_18_Mass_Rebuild
-
-* Thu Apr 26 2012 Jon Ciesla <limburgher@gmail.com> - 2:1.0-0.5.6e4e2a00
-- Merge review fixes, BZ 226132.
-
-* Fri Jan 13 2012 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2:1.0-0.4.6e4e2a00
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_17_Mass_Rebuild
-
-* Thu Nov 17 2011 Prarit Bhargava <prarit@redhat.com> 2:1.0-0.3.6e4e2a00
-- Updated sources to deal with various warning issues [701083] [704302]
-- Update URL for new location of Andi's mcelog tree
-- Update n-v-r to include latest git hash
-
-* Tue Feb 08 2011 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2:1.0-0.3.pre3
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_15_Mass_Rebuild
-
-* Wed Nov 10 2010 Jon Masters <jcm@redhat.com> 2:1.0-0.2.pre3
-- Rework mcelog to use daemon mode and systemd.
-
-* Tue Nov 09 2010 Jon Masters <jcm@redhat.com> 2:1.0-0.1.pre3
-- Bump epoch and use standard Fedora Packaging Guidelines for NVR.
-- Switch to using signed bz2 source and remove dead patch.
-
-* Fri Sep 17 2010 Dave Jones <davej@redhat.com> 1:1.0pre3-0.1
-- Update to upstream mcelog-1.0pre3
-
-* Mon Oct 05 2009 Orion Poplawski <orion@cora.nwra.com> - 1:0.9pre1-0.1
-- Update to 0.9pre1
-- Update URL
-- Add patch to update mcelog kernel record length (bug #507026)
-
-* Tue Aug 04 2009 Adam Jackson <ajax@redhat.com> 0.7-5
-- Fix %%install for new buildroot cleanout.
-
-* Sat Jul 25 2009 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 1:0.7-4
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_12_Mass_Rebuild
-
-* Wed Feb 25 2009 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 1:0.7-3
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_11_Mass_Rebuild
-
-* Thu Aug  7 2008 Tom "spot" Callaway <tcallawa@redhat.com> - 1:0.7-2
-- fix license tag
-- clean this package up
-
-* Tue Feb 19 2008 Fedora Release Engineering <rel-eng@fedoraproject.org> - 1:0.7-1.22
-- Autorebuild for GCC 4.3
-
-* Mon Jul 17 2006 Jesse Keating <jkeating@redhat.com>
-- Rebuild.
-
-* Fri Jun 30 2006 Dave Jones <davej@redhat.com>
-- Rebuild. (#197385)
-
-* Wed May 17 2006 Dave Jones <davej@redhat.com>
-- Update to upstream 0.7
-- Change frequency to hourly instead of daily.
-
-* Thu Feb 09 2006 Dave Jones <davej@redhat.com>
-- rebuild.
-
-* Wed Feb  8 2006 Dave Jones <davej@redhat.com>
-- Update to upstream 0.6
-
-* Mon Dec 19 2005 Dave Jones <davej@redhat.com>
-- Update to upstream 0.5
-
-* Fri Dec 16 2005 Jesse Keating <jkeating@redhat.com>
-- rebuilt for new gcj
-
-* Fri Dec 09 2005 Jesse Keating <jkeating@redhat.com>
-- rebuilt
-
-* Tue Mar  1 2005 Dave Jones <davej@redhat.com>
-- Rebuild for gcc4
-
-* Wed Feb  9 2005 Dave Jones <davej@redhat.com>
-- Update to upstream 0.4
-
-* Thu Jan 27 2005 Dave Jones <davej@redhat.com>
-- Initial packaging.
-
+* Wed Dec 13 2023 Gerald Elder-Vass <gerald.elder-vass@citrix.com> - 3:144.8.94d853b2ea81
+- First imported release
